@@ -142,6 +142,51 @@ export default function ProfilePage() {
       return;
     }
 
+    // Robust PDF parsing for auto-fill
+    if (file.type === "application/pdf") {
+      const pdfjsLib = await import("pdfjs-dist/build/pdf");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js";
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const typedarray = new Uint8Array(e.target.result);
+        const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+        let text = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          text += content.items.map((item) => item.str).join(" ") + " ";
+        }
+        // Helper regexes
+        const phoneMatch = text.match(/(\+\d{1,3}[-.\s]?)?(\d{10,12})/);
+        const linkedInMatch = text.match(/https?:\/\/(www\.)?linkedin\.com\/[a-zA-Z0-9\-_/]+/);
+        // Name: first non-empty line, likely at top
+        let name = "";
+        const lines = text.split(/\n|\r|\r\n/).map(l => l.trim()).filter(Boolean);
+        if (lines.length > 0) name = lines[0];
+        // Experience: look for years or experience
+        let experience = "";
+        const expMatch = text.match(/([0-9]+\+?)\s*(years|yrs|year|yr)?\s*(of)?\s*experience/i);
+        if (expMatch) experience = expMatch[1] + (expMatch[2] ? " " + expMatch[2] : " years");
+        // City: look for 'Current City' or 'Location' or after 'Address'
+        let city = "";
+        const cityMatch = text.match(/Current City:?\s*([A-Za-z ]+)/i) || text.match(/Location:?\s*([A-Za-z ]+)/i) || text.match(/Address:?\s*([A-Za-z ]+)/i);
+        if (cityMatch) city = cityMatch[1].trim();
+        // Summary: look for 'Summary' or 'Profile Summary' section
+        let summary = "";
+        const summaryMatch = text.match(/(Summary|Professional Summary|Profile Summary|About)[\s:]*([\s\S]{0,500})/i);
+        if (summaryMatch) summary = summaryMatch[2].split(/\n|\r|\r\n/)[0].trim();
+        setForm((current) => ({
+          ...current,
+          name: name || current.name,
+          phone: phoneMatch ? phoneMatch[0] : current.phone,
+          totalExperience: experience || current.totalExperience,
+          currentCity: city || current.currentCity,
+          linkedInUrl: linkedInMatch ? linkedInMatch[0] : current.linkedInUrl,
+          summary: summary || current.summary,
+        }));
+      };
+      reader.readAsArrayBuffer(file);
+    }
     setIsUploading(true);
     setFeedback("");
 
@@ -199,91 +244,12 @@ export default function ProfilePage() {
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-2">
             <TextField label="Full name" value={form.name} onChange={handleChange("name")} />
             <TextField label="Phone" value={form.phone} onChange={handleChange("phone")} />
-            <TextField
-              label="Alternate phone"
-              value={form.altPhone}
-              onChange={handleChange("altPhone")}
-            />
-            <TextField
-              label="Headline"
-              value={form.headline}
-              onChange={handleChange("headline")}
-            />
-            <TextField
-              label="Total experience"
-              value={form.totalExperience}
-              onChange={handleChange("totalExperience")}
-            />
-            <TextField
-              label="Current title"
-              value={form.currentTitle}
-              onChange={handleChange("currentTitle")}
-            />
-            <TextField
-              label="Current company"
-              value={form.currentCompany}
-              onChange={handleChange("currentCompany")}
-            />
-            <TextField
-              label="Notice period"
-              value={form.noticePeriod}
-              onChange={handleChange("noticePeriod")}
-            />
-            <TextField
-              label="Current city"
-              value={form.currentCity}
-              onChange={handleChange("currentCity")}
-            />
-            <TextField
-              label="Current state"
-              value={form.currentState}
-              onChange={handleChange("currentState")}
-            />
-            <TextField
-              label="Current country"
-              value={form.currentCountry}
-              onChange={handleChange("currentCountry")}
-            />
-            <TextField
-              label="Expected salary"
-              value={form.expectedSalary}
-              onChange={handleChange("expectedSalary")}
-            />
-            <TextField
-              label="Preferred roles"
-              value={form.preferredRoles}
-              onChange={handleChange("preferredRoles")}
-            />
-            <TextField
-              label="Preferred locations"
-              value={form.preferredLocations}
-              onChange={handleChange("preferredLocations")}
-            />
-            <TextField label="Skills" value={form.skills} onChange={handleChange("skills")} />
-            <TextField
-              label="LinkedIn URL"
-              value={form.linkedInUrl}
-              onChange={handleChange("linkedInUrl")}
-            />
-            <TextField
-              label="Portfolio URL"
-              value={form.portfolioUrl}
-              onChange={handleChange("portfolioUrl")}
-              className="md:col-span-2"
-            />
-            <TextAreaField
-              label="Professional summary"
-              value={form.summary}
-              onChange={handleChange("summary")}
-              className="md:col-span-2"
-            />
-
+            <TextField label="Total experience" value={form.totalExperience} onChange={handleChange("totalExperience")} />
+            <TextField label="Current city" value={form.currentCity} onChange={handleChange("currentCity")} />
+            <TextField label="LinkedIn URL" value={form.linkedInUrl} onChange={handleChange("linkedInUrl")} />
+            <TextAreaField label="Professional summary" value={form.summary} onChange={handleChange("summary")} className="md:col-span-2" />
             <div className="md:col-span-2">
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="rounded-2xl bg-[#163060] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1d3f7f] disabled:cursor-not-allowed disabled:opacity-70"
-              >
+              <button type="submit" disabled={isSaving} className="rounded-2xl bg-[#163060] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1d3f7f] disabled:cursor-not-allowed disabled:opacity-70">
                 {isSaving ? "Saving..." : "Save profile changes"}
               </button>
             </div>
