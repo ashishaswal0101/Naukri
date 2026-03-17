@@ -34,6 +34,8 @@ router.put("/packages/:name", protectCrmPanel, crmPanelController.upsertPackage)
 
 router.get("/qr-codes", protectCrmPanel, crmPanelController.getQRCodes);
 router.post("/qr-codes", protectCrmPanel, crmPanelController.createQRCode);
+router.get("/qr-codes/:id", protectCrmPanel, crmPanelController.getQRCode);
+router.patch("/qr-codes/:id", protectCrmPanel, crmPanelController.updateQRCode);
 router.patch("/qr-codes/:id/share", protectCrmPanel, crmPanelController.shareQRCode);
 
 router.get("/applications", protectCrmPanel, crmPanelController.getApplications);

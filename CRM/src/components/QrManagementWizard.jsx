@@ -62,7 +62,6 @@ const defaultForm = {
   email: "",
   phone: "",
   altPhone: "",
-  country: "",
   region: "",
   city: "",
   zone: "",
@@ -78,7 +77,7 @@ const defaultForm = {
   whyJoinUs: [emptyHighlight()],
 };
 
-const requiredFields = ["companyName", "industry", "email", "phone", "city", "about"];
+const requiredFields = ["companyName", "industry", "email", "phone", "region", "city", "about"];
 
 export default function QrManagementWizard({ onGenerated }) {
   const [formData, setFormData] = useState(defaultForm);
@@ -192,7 +191,6 @@ export default function QrManagementWizard({ onGenerated }) {
             altPhone: formData.altPhone,
           },
           location: {
-            country: formData.country,
             region: formData.region,
             city: formData.city,
             zone: formData.zone,
@@ -286,7 +284,7 @@ export default function QrManagementWizard({ onGenerated }) {
             <div className="grid gap-5 md:grid-cols-2">
               <TextField label="Company name" value={formData.companyName} onChange={(event) => updateField("companyName", event.target.value)} required />
               <TextField label="Tagline / slogan" value={formData.tagline} onChange={(event) => updateField("tagline", event.target.value)} />
-              <SelectField label="Industry" value={formData.industry} onChange={(event) => updateField("industry", event.target.value)} options={[{ label: "Select industry", value: "" }, ...INDUSTRIES.map((item) => ({ label: item, value: item }))]} />
+              <SelectField label="Industry" value={formData.industry} onChange={(event) => updateField("industry", event.target.value)} options={[{ label: "Select industry", value: "" }, ...INDUSTRIES.map((item) => ({ label: item, value: item }))]} required />
               <SelectField label="Company size" value={formData.companySize} onChange={(event) => updateField("companySize", event.target.value)} options={[{ label: "Select size", value: "" }, ...COMPANY_SIZES.map((item) => ({ label: item, value: item }))]} />
               <TextField label="Founded year" value={formData.foundedYear} onChange={(event) => updateField("foundedYear", event.target.value)} />
               <TextField label="Employees count" value={formData.employeesCount} onChange={(event) => updateField("employeesCount", event.target.value)} />
@@ -319,8 +317,7 @@ export default function QrManagementWizard({ onGenerated }) {
 
           <WizardSection visible={activeSection === 2} icon={LuMapPin} title="Location details" description="Geo fields used for reporting and client display.">
             <div className="grid gap-5 md:grid-cols-2">
-              <TextField label="Country" value={formData.country} onChange={(event) => updateField("country", event.target.value)} />
-              <TextField label="Region" value={formData.region} onChange={(event) => updateField("region", event.target.value)} />
+              <TextField label="State" value={formData.region} onChange={(event) => updateField("region", event.target.value)} required />
               <TextField label="City" value={formData.city} onChange={(event) => updateField("city", event.target.value)} required />
               <TextField label="Zone" value={formData.zone} onChange={(event) => updateField("zone", event.target.value)} />
               <TextField label="Address" value={formData.address} onChange={(event) => updateField("address", event.target.value)} />
@@ -418,16 +415,16 @@ export default function QrManagementWizard({ onGenerated }) {
   );
 }
 
-function WizardSection({ visible, icon: Icon, title, description, children }) {
+function WizardSection({ visible, icon: IconComponent, title, description, children }) {
   if (!visible) {
     return null;
   }
 
   return (
     <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_12px_35px_rgba(15,23,42,0.06)]">
-      <div className="flex items-start gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#163060] to-[#2856a6] text-white">
-          <Icon size={20} />
+        <div className="flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#163060] to-[#2856a6] text-white">
+          <IconComponent size={20} />
         </div>
         <div>
           <h3 className="text-xl font-bold text-slate-900">{title}</h3>

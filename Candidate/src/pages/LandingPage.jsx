@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   LuArrowRight,
   LuBadgeCheck,
@@ -8,19 +8,31 @@ import {
   LuMapPin,
   LuUsers,
 } from "react-icons/lu";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { PanelCard, PageState, SectionHeading } from "../components/Ui";
 import { formatDate } from "../utils/formatters";
-import { getLandingData, getStoredSession } from "../services/candidateApi";
+import {
+  createApplication,
+  getLandingData,
+  getStoredSession,
+} from "../services/candidateApi";
 
 export default function LandingPage() {
   const { token } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [state, setState] = useState({
     loading: true,
     error: "",
     payload: null,
   });
+  const [applyState, setApplyState] = useState({
+    loadingId: "",
+    success: "",
+    error: "",
+  });
+  const [appliedJobs, setAppliedJobs] = useState(new Set());
+  const [autoApplied, setAutoApplied] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -54,6 +66,72 @@ export default function LandingPage() {
     };
   }, [token]);
 
+  const jobs = Array.isArray(state.payload?.jobs) ? state.payload.jobs : [];
+  const company = state.payload?.company;
+  const hasSession = Boolean(getStoredSession()?.token);
+  const focusedJobId = (searchParams.get("jobId") || "").trim();
+  const autoApplyJobId = (searchParams.get("applyJobId") || "").trim();
+  const visibleJobs = focusedJobId
+    ? jobs.filter((job) => String(job.id) === focusedJobId)
+    : jobs;
+
+  const handleApply = useCallback(
+    async (jobId, { auto = false } = {}) => {
+      if (!jobId) return;
+
+      if (!hasSession) {
+        const query = new URLSearchParams();
+        query.set("token", token);
+        query.set("jobId", jobId);
+        query.set("applyJobId", jobId);
+        navigate(`/login?${query.toString()}`);
+        return;
+      }
+
+      setApplyState({ loadingId: jobId, success: "", error: "" });
+
+      try {
+        await createApplication({
+          jobId,
+          qrToken: token,
+        });
+
+        setAppliedJobs((current) => {
+          const next = new Set(current);
+          next.add(jobId);
+          return next;
+        });
+        setApplyState({
+          loadingId: "",
+          success: auto
+            ? "Application submitted automatically after sign-in."
+            : "Application submitted successfully.",
+          error: "",
+        });
+      } catch (error) {
+        setApplyState({
+          loadingId: "",
+          success: "",
+          error: error.message || "Unable to submit application.",
+        });
+      }
+    },
+    [hasSession, navigate, token],
+  );
+
+  useEffect(() => {
+    if (!hasSession || !autoApplyJobId || autoApplied || !jobs.length) {
+      return;
+    }
+
+    if (!jobs.some((job) => String(job.id) === autoApplyJobId)) {
+      return;
+    }
+
+    setAutoApplied(true);
+    handleApply(autoApplyJobId, { auto: true });
+  }, [autoApplyJobId, autoApplied, handleApply, hasSession, jobs]);
+
   if (state.loading) {
     return (
       <PageState
@@ -73,15 +151,23 @@ export default function LandingPage() {
     );
   }
 
-  const { company, jobs } = state.payload;
-  const hasSession = Boolean(getStoredSession()?.token);
+  const continueToJobs = (jobId = "") => {
+    const query = new URLSearchParams();
+    query.set("token", token);
+    if (jobId) query.set("jobId", jobId);
 
-  const continueToJobs = () => {
     navigate(
       hasSession
-        ? `/candidate/jobs?token=${encodeURIComponent(token)}`
-        : `/register?token=${encodeURIComponent(token)}`,
+        ? `/candidate/jobs?${query.toString()}`
+        : `/login?${query.toString()}`,
     );
+  };
+
+  const signIn = () => {
+    const query = new URLSearchParams();
+    query.set("token", token);
+    if (focusedJobId) query.set("jobId", focusedJobId);
+    navigate(`/login?${query.toString()}`);
   };
 
   return (
@@ -118,14 +204,22 @@ export default function LandingPage() {
 
               <div className="mt-8 flex flex-wrap gap-4">
                 <button
-                  onClick={continueToJobs}
+                  onClick={() =>
+                    focusedJobId ? handleApply(focusedJobId) : continueToJobs()
+                  }
                   className="inline-flex items-center gap-2 rounded-2xl bg-lime-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-lime-300"
                 >
-                  {hasSession ? "Open mapped jobs" : "Register to apply"}
+                  {hasSession
+                    ? focusedJobId
+                      ? "Apply to this job"
+                      : "Open mapped jobs"
+                    : focusedJobId
+                      ? "Sign in to apply"
+                      : "Sign in to apply"}
                   <LuArrowRight size={16} />
                 </button>
                 <button
-                  onClick={() => navigate(`/login?token=${encodeURIComponent(token)}`)}
+                  onClick={signIn}
                   className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:border-lime-300/30 hover:bg-lime-300/10"
                 >
                   Sign in
@@ -154,8 +248,19 @@ export default function LandingPage() {
               description="Only active, approved openings connected to this QR are shown here."
             />
 
+            {applyState.error ? (
+              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                {applyState.error}
+              </div>
+            ) : null}
+            {applyState.success ? (
+              <div className="mt-4 rounded-2xl border border-lime-200 bg-lime-50 px-4 py-3 text-sm font-medium text-lime-800">
+                {applyState.success}
+              </div>
+            ) : null}
+
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              {jobs.map((job) => (
+              {visibleJobs.map((job) => (
                 <article
                   key={job.id}
                   className="rounded-[24px] border border-slate-200 bg-slate-50 p-5 transition-all duration-200 hover:-translate-y-1 hover:border-lime-300 hover:bg-white hover:shadow-[0_20px_50px_rgba(132,204,22,0.12)]"
@@ -168,7 +273,7 @@ export default function LandingPage() {
                     </p>
                     <p className="flex items-center gap-2">
                       <LuBriefcaseBusiness size={16} />
-                      {job.department || "General"} • {job.jobType || "Full time"}
+                      {job.department || "General"} | {job.jobType || "Full time"}
                     </p>
                     <p className="flex items-center gap-2">
                       <LuCalendarClock size={16} />
@@ -179,10 +284,18 @@ export default function LandingPage() {
                     {job.description || "Role summary will be available after you enter the Candidate Module."}
                   </p>
                   <button
-                    onClick={continueToJobs}
-                    className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#163060] transition hover:text-lime-600"
+                    onClick={() => handleApply(String(job.id))}
+                    disabled={
+                      applyState.loadingId === String(job.id) ||
+                      appliedJobs.has(String(job.id))
+                    }
+                    className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-[#163060] transition hover:text-lime-600 disabled:cursor-not-allowed disabled:text-slate-400"
                   >
-                    Continue to apply
+                    {appliedJobs.has(String(job.id))
+                      ? "Applied"
+                      : applyState.loadingId === String(job.id)
+                        ? "Applying..."
+                        : "Apply now"}
                     <LuArrowRight size={15} />
                   </button>
                 </article>

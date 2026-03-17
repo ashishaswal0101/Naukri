@@ -131,6 +131,7 @@ const formatJob = (job, applicationMap = new Map()) => {
     experience: job.experience || "",
     salaryMin: Number(job.salaryMin || 0),
     salaryMax: Number(job.salaryMax || 0),
+    summary: job.summary || "",
     description: job.description || "",
     skills: Array.isArray(job.skills) ? job.skills : [],
     deadline: job.deadline || null,
@@ -467,7 +468,7 @@ exports.getLanding = asyncHandler(async (req, res) => {
 
 exports.getDashboard = asyncHandler(async (req, res) => {
   const profile = await ensureCandidateProfile(req.user);
-  const [applications, notifications, recommended, applicationStats] = await Promise.all([
+  const [applications, notifications, recommended, applicationStats, companyIds] = await Promise.all([
     Application.find({ candidateId: req.user._id })
       .sort({ updatedAt: -1 })
       .limit(6)
@@ -476,6 +477,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
     CandidateNotification.find({ candidateId: req.user._id }).sort({ createdAt: -1 }).limit(6),
     getRecommendedJobs(profile, req.user._id),
     Application.find({ candidateId: req.user._id }).select("status"),
+    Application.distinct("companyId", { candidateId: req.user._id }),
   ]);
 
   const unreadAlerts = await CandidateNotification.countDocuments({
@@ -495,6 +497,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
         interviews: applicationStats.filter((item) =>
           ["INTERVIEW", "OFFERED", "HIRED"].includes(item.status),
         ).length,
+        companiesApplied: companyIds.filter(Boolean).length,
         unreadAlerts,
       },
       mappedCompany: recommended.mappedCompany,

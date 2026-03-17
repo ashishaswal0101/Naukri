@@ -11,6 +11,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const token = searchParams.get("token") || "";
+  const jobId = searchParams.get("jobId") || "";
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -35,10 +36,21 @@ export default function Login() {
         profile: response.profile,
       });
 
-      navigate(
-        token ? `/candidate/jobs?token=${encodeURIComponent(token)}` : "/candidate/dashboard",
-        { replace: true },
-      );
+      if (token) {
+        const query = new URLSearchParams();
+        if (jobId) {
+          query.set("jobId", jobId);
+          query.set("applyJobId", jobId);
+        }
+
+        const queryString = query.toString();
+        navigate(
+          `/landing/${encodeURIComponent(token)}${queryString ? `?${queryString}` : ""}`,
+          { replace: true },
+        );
+      } else {
+        navigate("/candidate/dashboard", { replace: true });
+      }
     } catch (requestError) {
       setError(requestError.message || "Unable to sign in.");
     } finally {
@@ -124,7 +136,13 @@ export default function Login() {
             <p className="mt-5 text-sm text-slate-500">
               New candidate?{" "}
               <Link
-                to={token ? `/register?token=${encodeURIComponent(token)}` : "/register"}
+                to={
+                  token
+                    ? `/register?token=${encodeURIComponent(token)}${
+                        jobId ? `&jobId=${encodeURIComponent(jobId)}` : ""
+                      }`
+                    : "/register"
+                }
                 className="font-semibold text-[#163060] hover:text-lime-600"
               >
                 Create an account

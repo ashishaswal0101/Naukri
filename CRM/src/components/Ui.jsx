@@ -1,4 +1,4 @@
-export function cx(...parts) {
+function cx(...parts) {
   return parts.filter(Boolean).join(" ");
 }
 
@@ -163,24 +163,38 @@ export function ModalShell({
   );
 }
 
-export function TextField({ label, className = "", ...props }) {
+export function TextField({ label, required = false, className = "", ...props }) {
   return (
     <label className={cx("block", className)}>
-      <span className="text-sm font-semibold text-slate-700">{label}</span>
+      <span className="text-sm font-semibold text-slate-700">
+        {label}
+        {required ? <span className="text-rose-600"> *</span> : null}
+      </span>
       <input
         {...props}
+        required={required}
         className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:bg-white"
       />
     </label>
   );
 }
 
-export function SelectField({ label, options, className = "", ...props }) {
+export function SelectField({
+  label,
+  options,
+  required = false,
+  className = "",
+  ...props
+}) {
   return (
     <label className={cx("block", className)}>
-      <span className="text-sm font-semibold text-slate-700">{label}</span>
+      <span className="text-sm font-semibold text-slate-700">
+        {label}
+        {required ? <span className="text-rose-600"> *</span> : null}
+      </span>
       <select
         {...props}
+        required={required}
         className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:bg-white"
       >
         {options.map((option) => {
@@ -200,12 +214,16 @@ export function SelectField({ label, options, className = "", ...props }) {
   );
 }
 
-export function TextAreaField({ label, className = "", ...props }) {
+export function TextAreaField({ label, required = false, className = "", ...props }) {
   return (
     <label className={cx("block", className)}>
-      <span className="text-sm font-semibold text-slate-700">{label}</span>
+      <span className="text-sm font-semibold text-slate-700">
+        {label}
+        {required ? <span className="text-rose-600"> *</span> : null}
+      </span>
       <textarea
         {...props}
+        required={required}
         className="mt-2 min-h-[120px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:bg-white"
       />
     </label>

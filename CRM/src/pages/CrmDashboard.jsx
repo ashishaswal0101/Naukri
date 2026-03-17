@@ -40,9 +40,9 @@ const metricConfig = [
     tone: "amber",
   },
   {
-    label: "QR assets",
+    label: "QR-enabled clients",
     key: "qrCodes",
-    detail: "Generated QR journeys mapped to client companies and hiring needs.",
+    detail: "Distinct client companies with at least one active QR kit configured.",
     icon: LuQrCode,
     tone: "emerald",
   },
@@ -106,9 +106,10 @@ export default function CrmDashboard() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => (
-          <MetricCard key={metric.label} {...metric} />
-        ))}
+        {metrics.map((metric) => {
+          const { key: metricKey, ...metricProps } = metric;
+          return <MetricCard key={metricKey || metric.label} {...metricProps} />;
+        })}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -198,6 +199,22 @@ export default function CrmDashboard() {
               </div>
             </div>
 
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-500">
+                    QR codes generated
+                  </p>
+                  <p className="mt-2 text-3xl font-bold text-slate-900">
+                    {formatNumber(dashboard.summary.qrCodeRecords)}
+                  </p>
+                </div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-lime-500 text-white">
+                  <LuQrCode size={20} />
+                </div>
+              </div>
+            </div>
+
             <div className="space-y-3">
               {dashboard.qrOverview.slice(0, 3).map((item) => (
                 <div
@@ -262,7 +279,7 @@ export default function CrmDashboard() {
                     <div>
                       <p className="font-semibold text-slate-900">{job.title}</p>
                       <p className="mt-1 text-sm text-slate-500">
-                        {job.companyName} • {job.department || "General"}
+                        {job.companyName} {"\u2022"} {job.department || "General"}
                       </p>
                     </div>
                     <Badge
@@ -272,7 +289,7 @@ export default function CrmDashboard() {
                     </Badge>
                   </div>
                   <p className="mt-3 text-sm text-slate-500">
-                    {job.jobType || "Role"} • {job.workplaceType || "Flexible"} •{" "}
+                    {job.jobType || "Role"} {"\u2022"} {job.workplaceType || "Flexible"} {"\u2022"}{" "}
                     {job.location || "Location pending"}
                   </p>
                 </div>
@@ -306,7 +323,7 @@ export default function CrmDashboard() {
                         {application.candidateName}
                       </p>
                       <p className="mt-1 text-sm text-slate-500">
-                        {application.companyName} • {application.jobTitle}
+                        {application.companyName} {"\u2022"} {application.jobTitle}
                       </p>
                     </div>
                     <Badge tone="blue">{titleCase(application.status)}</Badge>

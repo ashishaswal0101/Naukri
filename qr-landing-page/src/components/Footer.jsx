@@ -1,33 +1,16 @@
-import Logo from '../assets/maven-logo.svg'
+import Logo from "../assets/maven-logo.svg";
 
 export default function Footer() {
   return (
-    <footer
-      className="text-center px-6 py-8 mt-4"
-      style={{
-        background: "#0f2550",
-        color: "rgba(255,255,255,0.35)",
-        fontSize: "13px",
-      }}
-    >
-      <div className="inline-flex items-center gap-2 mb-3">
-       <img src={Logo} alt="" />
+    <footer className="bg-[#0f2550] px-6 py-4 text-center text-[13px] text-white/40">
+      <div className="inline-flex items-center gap-2">
+        <img src={Logo} alt="Maven Jobs" className="h-6 w-auto" />
       </div>
-
-      <div>
-        Powered by{" "}
-        <a
-          href="#"
-          className="text-[#00c8d6] font-semibold hover:underline"
-        >
-          Maven CRM
-        </a>{" "}
-        · Join. Connect. Grow.
-      </div>
-
-      <div className="mt-1.5 text-[12px] text-white/20">
+      <div className="mt-2">Powered by Maven Jobs</div>
+      <div className="mt-1 text-[12px] text-white/25">
         © {new Date().getFullYear()} Maven Jobs. All rights reserved.
       </div>
     </footer>
   );
 }
+

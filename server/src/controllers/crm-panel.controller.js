@@ -140,6 +140,7 @@ const formatJob = (job) => ({
   experience: job.experience || "",
   salaryMin: Number(job.salaryMin || 0),
   salaryMax: Number(job.salaryMax || 0),
+  summary: job.summary || "",
   skills: Array.isArray(job.skills) ? job.skills : [],
   deadline: job.deadline || null,
   description: job.description || "",
@@ -168,6 +169,48 @@ const formatQRCodeRecord = (qrCode) => ({
   createdAt: qrCode.createdAt,
 });
 
+const formatQRCodeCompany = (company) => ({
+  id: String(company._id),
+  name: company.name,
+  tagline: company.tagline || "",
+  industry: company.industry || "",
+  website: company.website || "",
+  linkedIn: company.linkedIn || "",
+  email: company.email || "",
+  phone: company.phone || "",
+  altPhone: company.altPhone || "",
+  location: {
+    region: company.location?.region || "",
+    city: company.location?.city || "",
+    zone: company.location?.zone || "",
+    address: company.location?.address || "",
+    pincode: company.location?.pincode || "",
+  },
+  about: company.about || "",
+  mission: company.mission || "",
+  vision: company.vision || "",
+  whyJoinUs: Array.isArray(company.whyJoinUs)
+    ? company.whyJoinUs.map((item) => ({
+        icon: item.icon || "",
+        title: item.title || "",
+        desc: item.desc || "",
+      }))
+    : [],
+});
+
+const resolveQRCode = async (identifier) => {
+  if (!identifier) return null;
+
+  const byId = await QRCode.findById(identifier)
+    .populate("companyId")
+    .populate("jobId", "title");
+  if (byId) return byId;
+
+  return QRCode.findOne({ token: identifier })
+    .populate("companyId")
+    .populate("jobId", "title");
+};
+
 const formatApplication = (application, candidateUser) => ({
   id: String(application._id),
   companyName: application.companyId?.name || "Unknown company",
@@ -180,14 +223,15 @@ const formatApplication = (application, candidateUser) => ({
   lastUpdated: formatRelativeTime(application.updatedAt),
 });
 
-const uploadPdfBuffer = async (pdfBuffer, token) =>
+const uploadPdfBuffer = async (pdfBuffer, { token, publicId } = {}) =>
   new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         resource_type: "raw",
-        folder: "crm_qr_pdfs",
-        public_id: `crm_qr_${token}`,
+        public_id: publicId || `crm_qr_pdfs/crm_qr_${token}`,
         format: "pdf",
+        overwrite: true,
+        invalidate: true,
       },
       (error, result) => {
         if (error) {
@@ -201,6 +245,75 @@ const uploadPdfBuffer = async (pdfBuffer, token) =>
 
     streamifier.createReadStream(pdfBuffer).pipe(uploadStream);
   });
+
+const syncCompanyCapacity = async (companyId) => {
+  const [company, activeJobCount] = await Promise.all([
+    Company.findById(companyId),
+    Job.countDocuments({
+      companyId,
+      isActive: true,
+      approvalStatus: "APPROVED",
+    }),
+  ]);
+
+  if (!company) {
+    return null;
+  }
+
+  company.activeJobCount = activeJobCount;
+  company.openRoles = activeJobCount;
+  await company.save();
+
+  return company;
+};
+
+const createQrKitForCompany = async ({ companyId, jobId = null, createdByCRM }) => {
+  const company = await Company.findById(companyId);
+  if (!company) {
+    throw createHttpError(404, "Company not found");
+  }
+
+  const jobs = jobId
+    ? await Job.find({
+        _id: jobId,
+        companyId,
+        isActive: true,
+        approvalStatus: "APPROVED",
+      })
+    : await Job.find({
+        companyId,
+        isActive: true,
+        approvalStatus: "APPROVED",
+      });
+
+  const token = crypto.randomUUID();
+  const redirectUrl = `${getCandidateWebUrl()}/landing/${token}`;
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
+    redirectUrl,
+  )}`;
+
+  const pdfBuffer = await generateCompanyQRPDF({
+    company,
+    jobs,
+    qrImageUrl,
+  });
+  const uploadedPdf = await uploadPdfBuffer(pdfBuffer, { token });
+
+  const qrCode = await QRCode.create({
+    companyId,
+    jobId: jobId || null,
+    token,
+    qrImageUrl,
+    pdfUrl: uploadedPdf.secure_url,
+    pdfPublicId: uploadedPdf.public_id,
+    createdByCRM,
+    isActive: true,
+  });
+
+  return QRCode.findById(qrCode._id)
+    .populate("companyId", "name")
+    .populate("jobId", "title");
+};
 
 const createOrUpdateClientUser = async ({
   company,
@@ -308,6 +421,13 @@ exports.getDashboard = asyncHandler(async (req, res) => {
       Job.countDocuments({ approvalStatus: "PENDING" }),
     ]);
 
+  const activeQrCompanyIds = await QRCode.distinct("companyId", { isActive: true });
+  const qrAssets = activeQrCompanyIds.length
+    ? await Company.countDocuments({ _id: { $in: activeQrCompanyIds } })
+    : 0;
+  const qrCodeRecords = await QRCode.countDocuments({ isActive: true });
+  const campaignCount = await CrmCampaign.countDocuments();
+
   const dashboardCandidateIds = [
     ...new Set(applications.map((application) => String(application.candidateId || ""))),
   ].filter(Boolean);
@@ -327,8 +447,9 @@ exports.getDashboard = asyncHandler(async (req, res) => {
         totalCandidates: candidateCount,
         totalApplications: applicationCount,
         pendingApprovals,
-        qrCodes: await QRCode.countDocuments(),
-        campaigns: await CrmCampaign.countDocuments(),
+        qrCodes: qrAssets,
+        qrCodeRecords,
+        campaigns: campaignCount,
       },
       packageCards: packages.map((pkg) => ({
         name: pkg.name,
@@ -441,10 +562,24 @@ exports.createClient = asyncHandler(async (req, res) => {
   company.clientUserId = clientUser._id;
   await company.save();
 
+  let qrCode = null;
+  let qrGenerationError = "";
+
+  try {
+    qrCode = await createQrKitForCompany({
+      companyId: company._id,
+      createdByCRM: req.user._id,
+    });
+  } catch (error) {
+    qrGenerationError = error?.message || "Unable to generate QR kit.";
+  }
+
   res.status(201).json({
     success: true,
     data: formatClient(company, clientUser),
     temporaryPassword: generatedPassword,
+    qrCode: qrCode ? formatQRCodeRecord(qrCode) : null,
+    qrGenerationError,
   });
 });
 
@@ -529,6 +664,7 @@ exports.createJob = asyncHandler(async (req, res) => {
   const {
     companyId = "",
     title = "",
+    summary = "",
     department = "",
     jobType = "",
     workplaceType = "",
@@ -551,13 +687,22 @@ exports.createJob = asyncHandler(async (req, res) => {
     throw createHttpError(404, "Company not found");
   }
 
-  if (!createAsClient && company.activeJobCount >= company.jobLimit) {
-    throw createHttpError(400, "Job limit exceeded for this package");
+  if (!createAsClient) {
+    const activeCount = await Job.countDocuments({
+      companyId: company._id,
+      isActive: true,
+      approvalStatus: "APPROVED",
+    });
+
+    if (activeCount >= company.jobLimit) {
+      throw createHttpError(400, "Job limit exceeded for this package");
+    }
   }
 
   const job = await Job.create({
     companyId: company._id,
     title: title.trim(),
+    summary: summary.trim(),
     department: department.trim(),
     jobType: jobType.trim(),
     workplaceType: workplaceType.trim(),
@@ -577,9 +722,7 @@ exports.createJob = asyncHandler(async (req, res) => {
   });
 
   if (!createAsClient) {
-    company.activeJobCount += 1;
-    company.openRoles = company.activeJobCount;
-    await company.save();
+    await syncCompanyCapacity(company._id);
   }
 
   const hydratedJob = await Job.findById(job._id).populate("companyId", "name");
@@ -596,7 +739,14 @@ exports.updateJob = asyncHandler(async (req, res) => {
     throw createHttpError(404, "Job not found");
   }
 
+  const companyId = job.companyId?._id || job.companyId;
+  const company = await Company.findById(companyId);
+  if (!company) {
+    throw createHttpError(404, "Company not found");
+  }
+
   job.title = req.body.title?.trim() ?? job.title;
+  job.summary = req.body.summary?.trim() ?? job.summary;
   job.department = req.body.department?.trim() ?? job.department;
   job.jobType = req.body.jobType?.trim() ?? job.jobType;
   job.workplaceType = req.body.workplaceType?.trim() ?? job.workplaceType;
@@ -607,8 +757,29 @@ exports.updateJob = asyncHandler(async (req, res) => {
   job.skills = req.body.skills ?? job.skills;
   job.deadline = req.body.deadline ?? job.deadline;
   job.description = req.body.description?.trim() ?? job.description;
-  job.isActive = req.body.isActive ?? job.isActive;
+
+  const nextIsActive =
+    typeof req.body.isActive === "boolean" ? req.body.isActive : job.isActive;
+
+  if (job.approvalStatus === "APPROVED" && nextIsActive && !job.isActive) {
+    const activeCount = await Job.countDocuments({
+      companyId: company._id,
+      isActive: true,
+      approvalStatus: "APPROVED",
+      _id: { $ne: job._id },
+    });
+
+    if (activeCount >= company.jobLimit) {
+      throw createHttpError(400, "Job limit exceeded for this package");
+    }
+  }
+
+  job.isActive = nextIsActive;
   await job.save();
+
+  if (job.approvalStatus === "APPROVED") {
+    await syncCompanyCapacity(company._id);
+  }
 
   res.status(200).json({
     success: true,
@@ -645,7 +816,14 @@ exports.updateJobApproval = asyncHandler(async (req, res) => {
   }
 
   if (decision === "APPROVE") {
-    if (company.activeJobCount >= company.jobLimit) {
+    const activeCount = await Job.countDocuments({
+      companyId: company._id,
+      isActive: true,
+      approvalStatus: "APPROVED",
+      _id: { $ne: job._id },
+    });
+
+    if (activeCount >= company.jobLimit) {
       throw createHttpError(400, "Job limit exceeded for this package");
     }
 
@@ -653,9 +831,6 @@ exports.updateJobApproval = asyncHandler(async (req, res) => {
     job.rejectionReason = "";
     job.isActive = true;
     job.publishedByCRMAt = new Date();
-    company.activeJobCount += 1;
-    company.openRoles = company.activeJobCount;
-    await company.save();
   } else {
     job.approvalStatus = "REJECTED";
     job.rejectionReason = req.body.rejectionReason?.trim() || "Rejected by CRM";
@@ -663,6 +838,7 @@ exports.updateJobApproval = asyncHandler(async (req, res) => {
   }
 
   await job.save();
+  await syncCompanyCapacity(company._id);
 
   const hydratedJob = await Job.findById(job._id).populate("companyId", "name");
 
@@ -736,6 +912,133 @@ exports.getQRCodes = asyncHandler(async (req, res) => {
   });
 });
 
+exports.getQRCode = asyncHandler(async (req, res) => {
+  const qrCode = await resolveQRCode(req.params.id);
+
+  if (!qrCode) {
+    throw createHttpError(404, "QR code not found");
+  }
+
+  if (!qrCode.companyId?._id) {
+    throw createHttpError(404, "Company not found");
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      ...formatQRCodeRecord(qrCode),
+      company: formatQRCodeCompany(qrCode.companyId),
+    },
+  });
+});
+
+exports.updateQRCode = asyncHandler(async (req, res) => {
+  const qrCode = await resolveQRCode(req.params.id);
+
+  if (!qrCode) {
+    throw createHttpError(404, "QR code not found");
+  }
+
+  const company =
+    qrCode.companyId?._id ? qrCode.companyId : await Company.findById(qrCode.companyId);
+
+  if (!company) {
+    throw createHttpError(404, "Company not found");
+  }
+
+  const applyTrimmedString = (nextValue, fallbackValue) => {
+    if (typeof nextValue !== "string") {
+      return fallbackValue;
+    }
+
+    const trimmed = nextValue.trim();
+    return trimmed ? trimmed : fallbackValue;
+  };
+
+  const incomingCompany = req.body.company || {};
+  const incomingContact = incomingCompany.contact || {};
+  const incomingLocation = incomingCompany.location || {};
+
+  company.name = applyTrimmedString(incomingCompany.name, company.name);
+  company.tagline = applyTrimmedString(incomingCompany.tagline, company.tagline || "");
+  company.industry = applyTrimmedString(incomingCompany.industry, company.industry || "");
+  company.website = applyTrimmedString(incomingCompany.website, company.website || "");
+  company.linkedIn = applyTrimmedString(incomingCompany.linkedIn, company.linkedIn || "");
+
+  const updatedEmail = applyTrimmedString(incomingContact.email, company.email);
+  company.email = updatedEmail ? updatedEmail.toLowerCase() : company.email;
+  company.phone = applyTrimmedString(incomingContact.phone, company.phone || "");
+  company.altPhone = applyTrimmedString(incomingContact.altPhone, company.altPhone || "");
+
+  company.location = {
+    ...(company.location || {}),
+    region: applyTrimmedString(incomingLocation.region, company.location?.region || ""),
+    city: applyTrimmedString(incomingLocation.city, company.location?.city || ""),
+    zone: applyTrimmedString(incomingLocation.zone, company.location?.zone || ""),
+    address: applyTrimmedString(incomingLocation.address, company.location?.address || ""),
+    pincode: applyTrimmedString(incomingLocation.pincode, company.location?.pincode || ""),
+  };
+
+  company.about = applyTrimmedString(req.body.about, company.about || "");
+  company.mission = applyTrimmedString(req.body.mission, company.mission || "");
+  company.vision = applyTrimmedString(req.body.vision, company.vision || "");
+
+  if (Array.isArray(req.body.whyJoinUs)) {
+    company.whyJoinUs = req.body.whyJoinUs
+      .map((item) => ({
+        icon: applyTrimmedString(item?.icon, ""),
+        title: applyTrimmedString(item?.title, ""),
+        desc: applyTrimmedString(item?.desc, ""),
+      }))
+      .filter((item) => item.title || item.desc || item.icon);
+  }
+
+  await company.save();
+
+  const companyId = company._id;
+  const jobId = qrCode.jobId?._id || qrCode.jobId || null;
+
+  const jobs = jobId
+    ? await Job.find({
+        _id: jobId,
+        companyId,
+        isActive: true,
+        approvalStatus: "APPROVED",
+      })
+    : await Job.find({
+        companyId,
+        isActive: true,
+        approvalStatus: "APPROVED",
+      });
+
+  const pdfBuffer = await generateCompanyQRPDF({
+    company,
+    jobs,
+    qrImageUrl: qrCode.qrImageUrl,
+  });
+
+  const uploadedPdf = await uploadPdfBuffer(pdfBuffer, {
+    token: qrCode.token,
+    publicId: qrCode.pdfPublicId || undefined,
+  });
+
+  qrCode.pdfUrl = uploadedPdf.secure_url;
+  qrCode.pdfPublicId = uploadedPdf.public_id;
+  await qrCode.save();
+
+  const hydratedQr = await QRCode.findById(qrCode._id)
+    .populate("companyId", "name")
+    .populate("jobId", "title");
+
+  res.status(200).json({
+    success: true,
+    data: {
+      ...formatQRCodeRecord(hydratedQr),
+      company: formatQRCodeCompany(company),
+    },
+  });
+});
+
 exports.createQRCode = asyncHandler(async (req, res) => {
   const { companyId = "", jobId = "" } = req.body;
 
@@ -743,41 +1046,11 @@ exports.createQRCode = asyncHandler(async (req, res) => {
     throw createHttpError(400, "Company is required");
   }
 
-  const company = await Company.findById(companyId);
-  if (!company) {
-    throw createHttpError(404, "Company not found");
-  }
-
-  const jobs = jobId
-    ? await Job.find({ _id: jobId, companyId })
-    : await Job.find({ companyId, approvalStatus: "APPROVED" });
-
-  const token = crypto.randomUUID();
-  const redirectUrl = `${getCandidateWebUrl()}/landing/${token}`;
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(
-    redirectUrl,
-  )}`;
-  const pdfBuffer = await generateCompanyQRPDF({
-    company,
-    jobs,
-    qrImageUrl,
-  });
-  const uploadedPdf = await uploadPdfBuffer(pdfBuffer, token);
-
-  const qrCode = await QRCode.create({
+  const hydratedQr = await createQrKitForCompany({
     companyId,
     jobId: jobId || null,
-    token,
-    qrImageUrl,
-    pdfUrl: uploadedPdf.secure_url,
-    pdfPublicId: uploadedPdf.public_id,
     createdByCRM: req.user._id,
-    isActive: true,
   });
-
-  const hydratedQr = await QRCode.findById(qrCode._id)
-    .populate("companyId", "name")
-    .populate("jobId", "title");
 
   res.status(201).json({
     success: true,
@@ -786,9 +1059,7 @@ exports.createQRCode = asyncHandler(async (req, res) => {
 });
 
 exports.shareQRCode = asyncHandler(async (req, res) => {
-  const qrCode = await QRCode.findById(req.params.id)
-    .populate("companyId", "name")
-    .populate("jobId", "title");
+  const qrCode = await resolveQRCode(req.params.id);
 
   if (!qrCode) {
     throw createHttpError(404, "QR code not found");

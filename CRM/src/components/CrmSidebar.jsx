@@ -32,7 +32,6 @@ export default function CrmSidebar({ isOpen, closeSidebar }) {
               <NavLink
                 key={item.path}
                 to={item.path}
-                onClick={closeSidebar}
                 className={({ isActive }) =>
                   `group flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     isActive

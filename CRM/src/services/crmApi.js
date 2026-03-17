@@ -177,9 +177,20 @@ export function getQRCodes() {
   return request("/qr-codes");
 }
 
+export function getQRCode(id) {
+  return request(`/qr-codes/${id}`);
+}
+
 export function createQRCode(payload) {
   return request("/qr-codes", {
     method: "POST",
+    body: payload,
+  });
+}
+
+export function updateQRCode(id, payload) {
+  return request(`/qr-codes/${id}`, {
+    method: "PATCH",
     body: payload,
   });
 }

@@ -15,6 +15,7 @@ export default function Register() {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const token = searchParams.get("token") || "";
+  const jobId = searchParams.get("jobId") || "";
 
   const handleChange = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -50,10 +51,21 @@ export default function Register() {
         profile: response.profile,
       });
 
-      navigate(
-        token ? `/candidate/jobs?token=${encodeURIComponent(token)}` : "/candidate/dashboard",
-        { replace: true },
-      );
+      if (token) {
+        const query = new URLSearchParams();
+        if (jobId) {
+          query.set("jobId", jobId);
+          query.set("applyJobId", jobId);
+        }
+
+        const queryString = query.toString();
+        navigate(
+          `/landing/${encodeURIComponent(token)}${queryString ? `?${queryString}` : ""}`,
+          { replace: true },
+        );
+      } else {
+        navigate("/candidate/dashboard", { replace: true });
+      }
     } catch (requestError) {
       setError(requestError.message || "Unable to create your account.");
     } finally {
@@ -165,7 +177,13 @@ export default function Register() {
             <p className="mt-5 text-sm text-slate-500">
               Already registered?{" "}
               <Link
-                to={token ? `/login?token=${encodeURIComponent(token)}` : "/login"}
+                to={
+                  token
+                    ? `/login?token=${encodeURIComponent(token)}${
+                        jobId ? `&jobId=${encodeURIComponent(jobId)}` : ""
+                      }`
+                    : "/login"
+                }
                 className="font-semibold text-[#163060] hover:text-lime-600"
               >
                 Sign in

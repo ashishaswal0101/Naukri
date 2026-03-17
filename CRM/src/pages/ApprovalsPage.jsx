@@ -171,10 +171,12 @@ export default function ApprovalsPage() {
                       <Badge tone="blue">{titleCase(job.createdBySource)}</Badge>
                     </div>
                     <p className="text-sm text-slate-500">
-                      {job.companyName} • {job.department || "General"} • {job.location || "Location pending"}
+                      {job.companyName} {"\u2022"} {job.department || "General"} {"\u2022"}{" "}
+                      {job.location || "Location pending"}
                     </p>
                     <p className="text-sm text-slate-500">
-                      {job.jobType || "Role"} • {job.workplaceType || "Flexible"} • {job.experience || "Experience open"}
+                      {job.jobType || "Role"} {"\u2022"} {job.workplaceType || "Flexible"} {"\u2022"}{" "}
+                      {job.experience || "Experience open"}
                     </p>
                     {job.rejectionReason ? (
                       <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">

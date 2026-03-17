@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { LuArrowRight, LuSearch, LuSparkles } from "react-icons/lu";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Badge,
   EmptyState,
@@ -12,13 +12,15 @@ import {
 import { formatDate, titleCase } from "../utils/formatters";
 import {
   createApplication,
-  getJobDetail,
   getJobs,
+  getSimilarJobs,
 } from "../services/candidateApi";
 
 export default function JobsPage() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const mappedToken = searchParams.get("token") || "";
+  const focusedJobId = (searchParams.get("jobId") || "").trim();
   const [search, setSearch] = useState("");
   const [state, setState] = useState({
     loading: true,
@@ -28,6 +30,7 @@ export default function JobsPage() {
   const [feedback, setFeedback] = useState("");
   const [expandedJob, setExpandedJob] = useState("");
   const [similarJobs, setSimilarJobs] = useState({});
+  const [similarStatus, setSimilarStatus] = useState({});
   const [activeApplyId, setActiveApplyId] = useState("");
 
   const loadJobs = async (nextSearch = search) => {
@@ -52,6 +55,14 @@ export default function JobsPage() {
     loadJobs("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mappedToken]);
+
+  useEffect(() => {
+    if (!focusedJobId || !state.data) return;
+
+    const element = document.getElementById(`job-${focusedJobId}`);
+    if (!element) return;
+    element.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [focusedJobId, state.data]);
 
   const handleSearchSubmit = async (event) => {
     event.preventDefault();
@@ -84,20 +95,35 @@ export default function JobsPage() {
 
     setExpandedJob(jobId);
 
-    if (similarJobs[jobId]) {
+    if (similarJobs[jobId] && !similarStatus[jobId]?.error) {
       return;
     }
 
     try {
-      const response = await getJobDetail(jobId);
+      setSimilarStatus((current) => ({
+        ...current,
+        [jobId]: { loading: true, error: "" },
+      }));
+      const response = await getSimilarJobs(jobId);
       setSimilarJobs((current) => ({
         ...current,
-        [jobId]: response.data.similarJobs || [],
+        [jobId]: response.data || [],
       }));
-    } catch {
+      setSimilarStatus((current) => ({
+        ...current,
+        [jobId]: { loading: false, error: "" },
+      }));
+    } catch (error) {
       setSimilarJobs((current) => ({
         ...current,
         [jobId]: [],
+      }));
+      setSimilarStatus((current) => ({
+        ...current,
+        [jobId]: {
+          loading: false,
+          error: error?.message || "Unable to load similar roles right now.",
+        },
       }));
     }
   };
@@ -123,6 +149,16 @@ export default function JobsPage() {
 
   const jobs = state.data?.jobs || [];
   const company = state.data?.company;
+  const visibleJobs = focusedJobId
+    ? jobs.filter((job) => String(job.id) === focusedJobId)
+    : jobs;
+
+  const handleViewAll = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("jobId");
+    const query = next.toString();
+    navigate(`/candidate/jobs${query ? `?${query}` : ""}`, { replace: true });
+  };
 
   return (
     <div className="space-y-6">
@@ -140,7 +176,22 @@ export default function JobsPage() {
               : "Search all currently approved jobs available to candidate accounts."
           }
           action={
-            company ? <Badge tone="lime">{company.industry || "Active company"}</Badge> : null
+            company || focusedJobId ? (
+              <div className="flex flex-wrap items-center gap-3">
+                {company ? (
+                  <Badge tone="lime">{company.industry || "Active company"}</Badge>
+                ) : null}
+                {focusedJobId ? (
+                  <button
+                    type="button"
+                    onClick={handleViewAll}
+                    className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-lime-300 hover:bg-lime-50 hover:text-[#163060]"
+                  >
+                    View all openings
+                  </button>
+                ) : null}
+              </div>
+            ) : null
           }
         />
 
@@ -168,26 +219,40 @@ export default function JobsPage() {
         ) : null}
       </PanelCard>
 
-      {jobs.length ? (
+      {visibleJobs.length ? (
         <div className="grid gap-5">
-          {jobs.map((job) => (
-            <PanelCard key={job.id} className="overflow-hidden">
+          {visibleJobs.map((job) => {
+            const similarState = similarStatus[job.id] || {};
+            const similarList = similarJobs[job.id] || [];
+            const isSimilarLoading = Boolean(similarState.loading);
+            const similarError = similarState.error;
+
+            return (
+              <PanelCard
+                key={job.id}
+                id={`job-${job.id}`}
+                className={
+                  focusedJobId && String(job.id) === focusedJobId
+                    ? "overflow-hidden ring-2 ring-lime-200"
+                    : "overflow-hidden"
+                }
+              >
               <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                <div className="max-w-3xl">
+                <div className="max-w-3xl min-w-0">
                   <div className="flex flex-wrap items-center gap-3">
-                    <h2 className="text-2xl font-bold text-slate-900">{job.title}</h2>
+                    <h2 className="break-words text-2xl font-bold text-slate-900">{job.title}</h2>
                     <Badge tone={job.hasApplied ? "emerald" : "blue"}>
                       {job.hasApplied ? titleCase(job.applicationStatus) : "Open"}
                     </Badge>
                   </div>
-                  <p className="mt-3 text-sm text-slate-500">
-                    {job.companyName} • {job.department} • {job.location || "Location shared later"}
+                  <p className="mt-3 break-words text-sm text-slate-500">
+                    {job.companyName} | {job.department} | {job.location || "Location shared later"}
                   </p>
-                  <p className="mt-4 text-sm leading-7 text-slate-600">
+                  <p className="mt-4 break-words text-sm leading-7 text-slate-600">
                     {job.description || "Role details are available in the application workflow."}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {job.skills.map((skill) => (
+                    {(job.skills || []).map((skill) => (
                       <span
                         key={`${job.id}-${skill}`}
                         className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700"
@@ -215,10 +280,11 @@ export default function JobsPage() {
                   </button>
                   <button
                     onClick={() => handleLoadSimilar(job.id)}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-lime-300 hover:bg-lime-50 hover:text-[#163060]"
+                    disabled={isSimilarLoading}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-lime-300 hover:bg-lime-50 hover:text-[#163060] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <LuSparkles size={16} />
-                    Similar roles
+                    {isSimilarLoading ? "Loading similar roles" : "Similar roles"}
                   </button>
                 </div>
               </div>
@@ -233,18 +299,28 @@ export default function JobsPage() {
                   </div>
 
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                    {(similarJobs[job.id] || []).length ? (
-                      (similarJobs[job.id] || []).map((similarJob) => (
+                    {isSimilarLoading ? (
+                      <EmptyState
+                        title="Loading similar jobs"
+                        description="Finding related openings for you."
+                      />
+                    ) : similarError ? (
+                      <EmptyState
+                        title="Unable to load similar jobs"
+                        description={similarError}
+                      />
+                    ) : similarList.length ? (
+                      similarList.map((similarJob) => (
                         <div
                           key={similarJob.id}
                           className="rounded-2xl border border-slate-200 bg-white px-4 py-4"
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p className="font-semibold text-slate-900">
+                            <div className="min-w-0">
+                              <p className="break-words font-semibold text-slate-900">
                                 {similarJob.title}
                               </p>
-                              <p className="mt-1 text-sm text-slate-500">
+                              <p className="mt-1 break-words text-sm text-slate-500">
                                 {similarJob.companyName}
                               </p>
                             </div>
@@ -273,13 +349,18 @@ export default function JobsPage() {
                   </div>
                 </div>
               ) : null}
-            </PanelCard>
-          ))}
+              </PanelCard>
+            );
+          })}
         </div>
       ) : (
         <EmptyState
-          title="No jobs available"
-          description="There are no active openings matching the current search or QR context."
+          title={focusedJobId ? "Job not available" : "No jobs available"}
+          description={
+            focusedJobId
+              ? "This job link is no longer active. View all openings to explore other roles."
+              : "There are no active openings matching the current search or QR context."
+          }
         />
       )}
     </div>

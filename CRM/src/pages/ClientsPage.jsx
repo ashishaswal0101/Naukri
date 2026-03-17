@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   LuBuilding2,
+  LuBriefcaseBusiness,
   LuKeyRound,
   LuPlus,
   LuSearch,
@@ -24,10 +25,26 @@ import {
   createClient,
   getClients,
   getPackages,
+  getQrPdfDownloadUrl,
   updateClient,
   updateClientCredentials,
 } from "../services/crmApi";
 import { formatNumber, titleCase } from "../utils/formatters";
+
+const industryOptions = [
+  "IT Services",
+  "Software / SaaS",
+  "Healthcare",
+  "Education",
+  "Retail",
+  "E-commerce",
+  "Finance",
+  "Manufacturing",
+  "Logistics",
+  "Hospitality",
+  "Real Estate",
+  "Media",
+];
 
 const defaultClientForm = {
   name: "",
@@ -66,6 +83,7 @@ export default function ClientsPage() {
   const [isCredentialsModalOpen, setIsCredentialsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
   const [credentialsTarget, setCredentialsTarget] = useState(null);
+  const [generatedQrKit, setGeneratedQrKit] = useState(null);
   const [clientForm, setClientForm] = useState(defaultClientForm);
   const [credentialsForm, setCredentialsForm] = useState(defaultCredentialForm);
   const [isSaving, setIsSaving] = useState(false);
@@ -107,6 +125,9 @@ export default function ClientsPage() {
       (sum, client) => sum + Number(client.activeJobCount || 0),
       0,
     );
+    const overLimitClients = clients.filter(
+      (client) => Number(client.activeJobCount || 0) > Number(client.jobLimit || 0),
+    ).length;
 
     return [
       {
@@ -136,6 +157,13 @@ export default function ClientsPage() {
         detail: "Active roles already consuming the current client package limits.",
         icon: LuBuilding2,
         tone: "emerald",
+      },
+      {
+        label: "Over limit",
+        value: formatNumber(overLimitClients),
+        detail: "Clients whose active jobs exceed their configured package limit.",
+        icon: LuBriefcaseBusiness,
+        tone: "rose",
       },
     ];
   }, [clients]);
@@ -221,6 +249,15 @@ export default function ClientsPage() {
             `Client created successfully. Temporary password: ${response.temporaryPassword}`,
           );
         }
+        if (response.qrCode) {
+          setGeneratedQrKit(response.qrCode);
+        } else if (response.qrGenerationError) {
+          setSuccessNote((current) =>
+            current
+              ? `${current} QR kit: ${response.qrGenerationError}`
+              : `Client created, but QR kit generation failed: ${response.qrGenerationError}`,
+          );
+        }
       }
 
       await loadPage();
@@ -260,7 +297,7 @@ export default function ClientsPage() {
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {metricCards.map((metric) => (
           <MetricCard key={metric.label} {...metric} />
         ))}
@@ -348,7 +385,8 @@ export default function ClientsPage() {
                 <div>
                   <p>{client.city || "City pending"}</p>
                   <p className="mt-1 text-xs text-slate-400">
-                    {client.region || "Region pending"} • {client.zone || "Zone pending"}
+                    {client.region || "Region pending"} {"\u2022"}{" "}
+                    {client.zone || "Zone pending"}
                   </p>
                 </div>
                 <div>
@@ -419,13 +457,23 @@ export default function ClientsPage() {
               placeholder="Maven Retail Pvt Ltd"
               required
             />
-            <TextField
+            <SelectField
               label="Industry"
               value={clientForm.industry}
               onChange={(event) =>
                 setClientForm((current) => ({ ...current, industry: event.target.value }))
               }
-              placeholder="Retail"
+              options={[
+                { label: "Select industry", value: "" },
+                ...industryOptions.map((industry) => ({ label: industry, value: industry })),
+                ...(clientForm.industry &&
+                !industryOptions.some(
+                  (industry) =>
+                    industry.toLowerCase() === clientForm.industry.trim().toLowerCase(),
+                )
+                  ? [{ label: `${clientForm.industry} (Custom)`, value: clientForm.industry }]
+                  : []),
+              ]}
             />
             <TextField
               label="Company email"
@@ -648,6 +696,65 @@ export default function ClientsPage() {
             </button>
           </div>
         </form>
+      </ModalShell>
+
+      <ModalShell
+        open={Boolean(generatedQrKit)}
+        onClose={() => setGeneratedQrKit(null)}
+        title="QR kit generated"
+        description={
+          generatedQrKit
+            ? `A QR kit was generated for ${generatedQrKit.companyName}.`
+            : ""
+        }
+      >
+        {generatedQrKit ? (
+          <div className="grid gap-5 md:grid-cols-[0.75fr_1.25fr]">
+            <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5 text-center">
+              <img
+                src={generatedQrKit.qrImageUrl}
+                alt="Generated QR"
+                className="mx-auto h-56 w-56 rounded-2xl border border-slate-200 bg-white p-4"
+              />
+            </div>
+            <div className="space-y-4">
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                <p className="text-sm font-semibold text-slate-500">Token</p>
+                <p className="mt-2 break-all text-sm font-medium text-slate-900">
+                  {generatedQrKit.token}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href={getQrPdfDownloadUrl(generatedQrKit.token)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-2xl bg-[#163060] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#20498f]"
+                >
+                  Download PDF
+                </a>
+                {generatedQrKit.pdfUrl ? (
+                  <a
+                    href={generatedQrKit.pdfUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50"
+                  >
+                    Open hosted PDF
+                  </a>
+                ) : null}
+                <a
+                  href={generatedQrKit.qrImageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50"
+                >
+                  View QR image
+                </a>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </ModalShell>
     </div>
   );

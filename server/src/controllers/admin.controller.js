@@ -554,7 +554,12 @@ const fetchSectionSnapshot = async () => {
     AdminSetting.find().sort({ module: 1 }),
     Company.find().sort({ createdAt: -1 }).limit(12).populate("createdByCRM", "fullName email"),
     Job.find().sort({ createdAt: -1 }).limit(12).populate("companyId", "name industry status"),
-    Application.find().sort({ createdAt: -1 }).limit(12).populate("jobId", "title").populate("companyId", "name"),
+    Application.find()
+      .sort({ createdAt: -1 })
+      .limit(12)
+      .populate("jobId", "title")
+      .populate("companyId", "name")
+      .populate("candidateId", "name email"),
     AdminAuditLog.find().sort({ createdAt: -1 }).limit(12),
     User.find({ role: "CANDIDATE" }).sort({ createdAt: -1 }).limit(12),
   ]);
@@ -747,11 +752,11 @@ const buildSectionData = async (sectionKey) => {
           note: "Share of recent applications that moved beyond applied status.",
         },
       ],
-      tableColumns: ["Job", "Company", "Candidate Id", "Status"],
+      tableColumns: ["Job", "Company", "Candidate", "Status"],
       tableRows: applications.map((application) => [
         application.jobId?.title || "Unknown job",
         application.companyId?.name || "Unknown company",
-        String(application.candidateId || ""),
+        application.candidateId?.name || "Unknown candidate",
         application.status,
       ]),
     };
@@ -940,6 +945,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
 
   const [
     companiesTotal,
+    overLimitClients,
     liveJobsTotal,
     candidateTotal,
     applicationsTotal,
@@ -952,6 +958,9 @@ exports.getDashboard = asyncHandler(async (req, res) => {
     auditLogs,
   ] = await Promise.all([
     Company.countDocuments(),
+    Company.countDocuments({
+      $expr: { $gt: ["$activeJobCount", "$jobLimit"] },
+    }),
     Job.countDocuments(),
     User.countDocuments({ role: "CANDIDATE" }),
     Application.countDocuments(),
@@ -987,6 +996,7 @@ exports.getDashboard = asyncHandler(async (req, res) => {
     data: {
       summary: {
         totalClients: companiesTotal,
+        overLimitClients,
         totalJobs: liveJobsTotal,
         totalCandidates: candidateTotal,
         totalApplications: applicationsTotal,

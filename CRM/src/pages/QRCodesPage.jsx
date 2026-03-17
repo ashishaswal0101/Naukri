@@ -12,7 +12,11 @@ import {
   TextField,
 } from "../components/Ui";
 import QrManagementWizard from "../components/QrManagementWizard";
-import { getQrPdfDownloadUrl, getQRCodes, shareQRCode } from "../services/crmApi";
+import {
+  getQrPdfDownloadUrl,
+  getQRCodes,
+  shareQRCode,
+} from "../services/crmApi";
 import { formatDateTime, formatNumber, titleCase } from "../utils/formatters";
 
 export default function QRCodesPage() {
@@ -20,10 +24,14 @@ export default function QRCodesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [successNote, setSuccessNote] = useState("");
   const [selectedQRCode, setSelectedQRCode] = useState(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [shareForm, setShareForm] = useState({ channel: "EMAIL", email: "" });
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  const getQrIdentifier = (item) => item?.id || item?._id || item?.token || "";
 
   const metrics = useMemo(() => {
     const shared = qrCodes.filter((item) => item.lastSharedAt).length;
@@ -61,6 +69,7 @@ export default function QRCodesPage() {
   async function loadQrCodes() {
     setIsLoading(true);
     setPageError("");
+    setSuccessNote("");
 
     try {
       const response = await getQRCodes();
@@ -78,7 +87,11 @@ export default function QRCodesPage() {
     setActionError("");
 
     try {
-      await shareQRCode(selectedQRCode.id, shareForm);
+      const identifier = getQrIdentifier(selectedQRCode);
+      if (!identifier) {
+        throw new Error("Unable to identify the QR record.");
+      }
+      await shareQRCode(identifier, shareForm);
       await loadQrCodes();
       setIsShareModalOpen(false);
     } catch (requestError) {
@@ -87,6 +100,8 @@ export default function QRCodesPage() {
       setIsSharing(false);
     }
   };
+
+
 
   if (isLoading) {
     return <PageState title="Loading QR management..." />;
@@ -104,7 +119,29 @@ export default function QRCodesPage() {
         ))}
       </section>
 
-      <QrManagementWizard onGenerated={loadQrCodes} />
+      <PanelCard>
+        <SectionHeading
+          eyebrow="QR creation"
+          title="Generate a new branded QR kit"
+          description="Generate a QR landing token, scannable image, and branded PDF kit for a company. Mandatory fields are marked with a red asterisk."
+        />
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+          <p className="text-sm text-slate-500">
+            Create a new QR kit without leaving this page.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setIsCreateModalOpen(true);
+              setActionError("");
+              setSuccessNote("");
+            }}
+            className="rounded-2xl bg-[#163060] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#20498f]"
+          >
+            Create / Generate QR
+          </button>
+        </div>
+      </PanelCard>
 
       <PanelCard>
         <SectionHeading
@@ -112,6 +149,12 @@ export default function QRCodesPage() {
           title="CRM-side QR history and sharing"
           description="Review every generated QR kit, open PDFs, inspect scan counts, and record sharing activity with client teams."
         />
+
+        {successNote ? (
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+            {successNote}
+          </div>
+        ) : null}
 
         {actionError ? (
           <div className="mt-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
@@ -143,7 +186,7 @@ export default function QRCodesPage() {
                       {item.sharedWithEmail || "no recipient recorded"}
                     </p>
                     <p className="text-xs text-slate-400">
-                      Created {formatDateTime(item.createdAt)} •{" "}
+                      Created {formatDateTime(item.createdAt)} {"\u2022"}{" "}
                       {formatNumber(item.scans)} scans
                     </p>
                   </div>
@@ -179,6 +222,7 @@ export default function QRCodesPage() {
                       </a>
                     ) : null}
                     <button
+                      type="button"
                       onClick={() => {
                         setSelectedQRCode(item);
                         setShareForm({
@@ -198,11 +242,26 @@ export default function QRCodesPage() {
           ) : (
             <EmptyState
               title="No QR kits generated yet"
-              description="Generate the first client QR workflow from the CRM wizard above."
+              description="Generate the first client QR workflow from the QR creation button above."
             />
           )}
         </div>
       </PanelCard>
+
+      <ModalShell
+        open={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="Create / Generate QR"
+        description="Generate a QR landing kit. Ensure all mandatory fields are filled before submitting."
+        width="max-w-5xl"
+      >
+        <QrManagementWizard
+          onGenerated={() => {
+            loadQrCodes();
+          }}
+        />
+      </ModalShell>
+
 
       <ModalShell
         open={isShareModalOpen}
@@ -254,6 +313,7 @@ export default function QRCodesPage() {
           </div>
         </form>
       </ModalShell>
+
     </div>
   );
 }

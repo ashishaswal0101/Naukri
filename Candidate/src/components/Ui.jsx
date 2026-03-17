@@ -1,4 +1,4 @@
-export function cx(...parts) {
+function cx(...parts) {
   return parts.filter(Boolean).join(" ");
 }
 
@@ -43,9 +43,10 @@ export function PageState({ title, description, error = false }) {
   );
 }
 
-export function PanelCard({ className = "", children }) {
+export function PanelCard({ className = "", children, ...rest }) {
   return (
     <section
+      {...rest}
       className={cx(
         "rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_12px_35px_rgba(15,23,42,0.06)]",
         className,
@@ -59,15 +60,15 @@ export function PanelCard({ className = "", children }) {
 export function SectionHeading({ eyebrow, title, description, action }) {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-      <div className="max-w-3xl">
+      <div className="max-w-3xl min-w-0">
         {eyebrow ? (
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">
             {eyebrow}
           </p>
         ) : null}
-        <h2 className="mt-2 text-2xl font-bold text-slate-900">{title}</h2>
+        <h2 className="mt-2 break-words text-2xl font-bold text-slate-900">{title}</h2>
         {description ? (
-          <p className="mt-2 text-sm leading-6 text-slate-500">{description}</p>
+          <p className="mt-2 break-words text-sm leading-6 text-slate-500">{description}</p>
         ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

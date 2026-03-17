@@ -10,6 +10,7 @@ const jobSchema = new mongoose.Schema(
     },
 
     title: { type: String, required: true },
+    summary: { type: String, default: "" },
     department: String,
     jobType: String,
     workplaceType: String,

@@ -28,7 +28,11 @@ export default function NotificationsPage() {
   };
 
   useEffect(() => {
-    loadNotifications();
+    const timer = window.setTimeout(() => {
+      void loadNotifications();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const handleRead = async (notificationId) => {

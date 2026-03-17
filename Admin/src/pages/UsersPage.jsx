@@ -26,14 +26,16 @@ const defaultUserForm = {
   password: "",
 };
 
-const roleOptions = ["ALL", "ADMIN", "CRM", "FSE", "CLIENT", "CANDIDATE"];
+const roleOptions = ["INTERNAL", "ALL", "ADMIN", "CRM", "FSE", "CLIENT", "CANDIDATE"];
+const assignableRoleOptions = ["ADMIN", "CRM", "FSE", "CLIENT", "CANDIDATE"];
 const statusOptions = ["ALL", "ACTIVE", "PENDING_INVITE", "RESTRICTED"];
+const internalRoles = ["ADMIN", "CRM", "FSE"];
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState("ALL");
+  const [roleFilter, setRoleFilter] = useState("INTERNAL");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -51,7 +53,11 @@ export default function UsersPage() {
           .toLowerCase()
           .includes(searchQuery.toLowerCase());
 
-      const matchesRole = roleFilter === "ALL" || user.role === roleFilter;
+      const matchesRole =
+        roleFilter === "ALL" ||
+        (roleFilter === "INTERNAL"
+          ? internalRoles.includes(user.role)
+          : user.role === roleFilter);
       const matchesStatus = statusFilter === "ALL" || user.status === statusFilter;
 
       return matchesSearch && matchesRole && matchesStatus;
@@ -357,6 +363,12 @@ function MetricAccent({ tone }) {
 }
 
 function FilterSelect({ icon: Icon, value, onChange, options }) {
+  const formatOptionLabel = (option) => {
+    if (option === "ALL") return "All";
+    if (option === "INTERNAL") return "Internal team";
+    return option.replaceAll("_", " ");
+  };
+
   return (
     <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 transition-colors duration-200 focus-within:border-lime-300 focus-within:bg-white">
       <Icon size={18} className="text-slate-400" />
@@ -367,7 +379,7 @@ function FilterSelect({ icon: Icon, value, onChange, options }) {
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option === "ALL" ? option.replace("ALL", "All") : option.replaceAll("_", " ")}
+            {formatOptionLabel(option)}
           </option>
         ))}
       </select>
@@ -453,7 +465,7 @@ function UserDrawer({
           </button>
         </div>
 
-        <form onSubmit={onSubmit} className="mt-8 space-y-5">
+        <form onSubmit={onSubmit} className="mt-8 space-y-5" autoComplete="off">
           <Field
             label="Full name"
             value={formState.fullName}
@@ -464,6 +476,7 @@ function UserDrawer({
           <Field
             label="Email"
             type="email"
+            autoComplete="off"
             value={formState.email}
             onChange={(value) =>
               setFormState((current) => ({ ...current, email: value }))
@@ -472,6 +485,7 @@ function UserDrawer({
           <Field
             label={editingUser ? "Password reset (optional)" : "Password"}
             type="password"
+            autoComplete="new-password"
             value={formState.password}
             onChange={(value) =>
               setFormState((current) => ({ ...current, password: value }))
@@ -482,7 +496,7 @@ function UserDrawer({
               label="Role"
               type="select"
               value={formState.role}
-              options={roleOptions.slice(1)}
+              options={assignableRoleOptions}
               onChange={(value) =>
                 setFormState((current) => ({ ...current, role: value }))
               }
@@ -543,7 +557,7 @@ function UserDrawer({
   );
 }
 
-function Field({ label, value, onChange, type = "text", options = [] }) {
+function Field({ label, value, onChange, type = "text", options = [], autoComplete }) {
   return (
     <label className="block">
       <span className="text-sm font-semibold text-slate-700">{label}</span>
@@ -564,6 +578,7 @@ function Field({ label, value, onChange, type = "text", options = [] }) {
           type={type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
+          autoComplete={autoComplete}
           className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-lime-300 focus:bg-white"
         />
       )}

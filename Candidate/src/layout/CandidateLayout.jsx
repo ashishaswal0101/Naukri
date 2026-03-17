@@ -9,10 +9,12 @@ export default function CandidateLayout() {
   const sidebarRef = useRef(null);
 
   useEffect(() => {
-    setIsSidebarOpen(false);
+    const timer = window.setTimeout(() => setIsSidebarOpen(false), 0);
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
+
+    return () => window.clearTimeout(timer);
   }, [pathname]);
 
   useEffect(() => {

@@ -25,6 +25,7 @@ import { formatDate, formatNumber, titleCase } from "../utils/formatters";
 const defaultJobForm = {
   companyId: "",
   title: "",
+  summary: "",
   department: "",
   jobType: "",
   workplaceType: "",
@@ -47,8 +48,10 @@ export default function JobsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [successNote, setSuccessNote] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [activeToggleId, setActiveToggleId] = useState("");
   const [editingJob, setEditingJob] = useState(null);
   const [jobForm, setJobForm] = useState(defaultJobForm);
 
@@ -143,6 +146,7 @@ export default function JobsPage() {
       companyId: clients[0]?.id || "",
     });
     setActionError("");
+    setSuccessNote("");
     setIsModalOpen(true);
   };
 
@@ -151,6 +155,7 @@ export default function JobsPage() {
     setJobForm({
       companyId: job.companyId,
       title: job.title,
+      summary: job.summary || "",
       department: job.department,
       jobType: job.jobType,
       workplaceType: job.workplaceType,
@@ -164,13 +169,35 @@ export default function JobsPage() {
       createAsClient: job.createdBySource === "CLIENT",
     });
     setActionError("");
+    setSuccessNote("");
     setIsModalOpen(true);
+  };
+
+  const handleToggleActive = async (job) => {
+    if (job.approvalStatus !== "APPROVED") {
+      return;
+    }
+
+    setActiveToggleId(job.id);
+    setActionError("");
+    setSuccessNote("");
+
+    try {
+      await updateJob(job.id, { isActive: !job.isActive });
+      await loadPage();
+      setSuccessNote(`Job ${job.isActive ? "deactivated" : "activated"} successfully.`);
+    } catch (requestError) {
+      setActionError(requestError.message || "Unable to update job status.");
+    } finally {
+      setActiveToggleId("");
+    }
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setIsSaving(true);
     setActionError("");
+    setSuccessNote("");
 
     const payload = {
       ...jobForm,
@@ -236,6 +263,12 @@ export default function JobsPage() {
           </div>
         ) : null}
 
+        {successNote ? (
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
+            {successNote}
+          </div>
+        ) : null}
+
         <div className="mt-6 grid gap-3 xl:grid-cols-[1.2fr_0.85fr_0.85fr]">
           <ToolbarInput
             icon={LuSearch}
@@ -286,14 +319,16 @@ export default function JobsPage() {
                 <div>
                   <p className="font-semibold text-slate-900">{job.title}</p>
                   <p className="mt-1 text-xs text-slate-400">
-                    {job.department || "General"} • {job.experience || "Experience open"}
+                    {job.department || "General"} {"\u2022"}{" "}
+                    {job.experience || "Experience open"}
                   </p>
                 </div>
                 <div>{job.companyName}</div>
                 <div>
                   <p>{job.jobType || "Type pending"}</p>
                   <p className="mt-1 text-xs text-slate-400">
-                    {job.workplaceType || "Flexible"} • {job.location || "Location pending"}
+                    {job.workplaceType || "Flexible"} {"\u2022"}{" "}
+                    {job.location || "Location pending"}
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -319,12 +354,27 @@ export default function JobsPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <button
-                    onClick={() => openEditModal(job)}
-                    className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50"
-                  >
-                    Edit
-                  </button>
+                  <div className="flex flex-col items-end gap-2">
+                    <button
+                      onClick={() => openEditModal(job)}
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50"
+                    >
+                      Edit
+                    </button>
+                    {job.approvalStatus === "APPROVED" ? (
+                      <button
+                        onClick={() => handleToggleActive(job)}
+                        disabled={activeToggleId === job.id}
+                        className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-lime-300 hover:bg-lime-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {activeToggleId === job.id
+                          ? "Saving..."
+                          : job.isActive
+                            ? "Deactivate"
+                            : "Activate"}
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             ))
@@ -366,6 +416,15 @@ export default function JobsPage() {
                 setJobForm((current) => ({ ...current, title: event.target.value }))
               }
               required
+            />
+            <TextAreaField
+              label="JD summary / brief"
+              className="md:col-span-2"
+              value={jobForm.summary}
+              onChange={(event) =>
+                setJobForm((current) => ({ ...current, summary: event.target.value }))
+              }
+              placeholder="Short summary for the job description."
             />
             <TextField
               label="Department"

@@ -38,6 +38,7 @@ exports.getLandingPageData = async (req, res) => {
     return res.json({
       success: true,
       data: {
+        candidateWebUrl: process.env.CANDIDATE_WEB_URL || process.env.FRONTEND_URL || "",
         company: {
           ...company.toObject(),
           jobs,

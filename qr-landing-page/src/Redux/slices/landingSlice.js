@@ -6,6 +6,7 @@ const landingSlice = createSlice({
   initialState: {
     company: null,
     scans: 0,
+    candidateWebUrl: "",
     loading: false,
     error: null,
   },
@@ -20,6 +21,7 @@ const landingSlice = createSlice({
         state.loading = false;
         state.company = action.payload.company;
         state.scans = action.payload.scans;
+        state.candidateWebUrl = action.payload.candidateWebUrl || "";
       })
       .addCase(fetchLandingData.rejected, (state, action) => {
         state.loading = false;

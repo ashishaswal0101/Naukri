@@ -15,6 +15,7 @@ export default function ApplicationsPage() {
     loading: true,
     error: "",
     data: [],
+    recentlyUpdatedCount: 0,
   });
 
   useEffect(() => {
@@ -23,12 +24,18 @@ export default function ApplicationsPage() {
     const loadApplications = async () => {
       try {
         const response = await getApplications();
+        const now = Date.now();
+        const recentlyUpdatedCount = (response.data || []).filter((item) => {
+          const updatedAt = new Date(item.updatedAt).getTime();
+          return now - updatedAt < 7 * 24 * 60 * 60 * 1000;
+        }).length;
 
         if (isMounted) {
           setState({
             loading: false,
             error: "",
             data: response.data,
+            recentlyUpdatedCount,
           });
         }
       } catch (error) {
@@ -37,6 +44,7 @@ export default function ApplicationsPage() {
             loading: false,
             error: error.message || "Unable to load applications.",
             data: [],
+            recentlyUpdatedCount: 0,
           });
         }
       }
@@ -104,12 +112,7 @@ export default function ApplicationsPage() {
         />
         <MetricCard
           label="Updated Recently"
-          value={formatNumber(
-            applications.filter((item) => {
-              const updatedAt = new Date(item.updatedAt).getTime();
-              return Date.now() - updatedAt < 7 * 24 * 60 * 60 * 1000;
-            }).length,
-          )}
+          value={formatNumber(state.recentlyUpdatedCount)}
           detail="Applications updated in the last seven days."
           icon={LuCalendarClock}
           tone="lime"

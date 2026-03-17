@@ -61,6 +61,15 @@ const kpiConfig = [
     tone: "from-[#f59e0b] to-[#f97316]",
     icon: LuFileCheck2,
   },
+  {
+    title: "Over-limit Clients",
+    key: "overLimitClients",
+    changeKey: "totalClients",
+    changeLabel: "total clients",
+    detail: "Clients with active job postings above package limits",
+    tone: "from-[#dc2626] to-[#f97316]",
+    icon: LuCircleAlert,
+  },
 ];
 
 export default function AdminDashboard() {
@@ -121,7 +130,7 @@ export default function AdminDashboard() {
 
   return (
     <div className="mx-auto w-full max-w-7xl">
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {kpis.map((item) => {
           const Icon = item.icon;
 
@@ -348,26 +357,32 @@ export default function AdminDashboard() {
             </h2>
           </div>
           <div className="mt-5 space-y-4">
-            {dashboard.activityTimeline.map((item, index) => {
-              const Icon = iconMap[item.iconKey] || LuActivity;
+            {dashboard.activityTimeline.length ? (
+              dashboard.activityTimeline.map((item, index) => {
+                const Icon = iconMap[item.iconKey] || LuActivity;
 
-              return (
-                <div
-                  key={`${item.title}-${index}`}
-                  className="flex gap-4 rounded-2xl px-1 py-1 transition-colors duration-200 hover:bg-lime-50/40"
-                >
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-[#163060]">
-                    <Icon size={18} />
+                return (
+                  <div
+                    key={`${item.title}-${index}`}
+                    className="flex gap-4 rounded-2xl px-1 py-1 transition-colors duration-200 hover:bg-lime-50/40"
+                  >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-[#163060]">
+                      <Icon size={18} />
+                    </div>
+                    <div className="min-w-0 border-b border-slate-100 pb-4 last:border-b-0 last:pb-0">
+                      <p className="text-sm font-semibold leading-6 text-slate-900">
+                        {item.title}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">{item.time}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0 border-b border-slate-100 pb-4 last:border-b-0 last:pb-0">
-                    <p className="text-sm font-semibold leading-6 text-slate-900">
-                      {item.title}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-500">{item.time}</p>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                No monitoring or governance activity logged yet.
+              </div>
+            )}
           </div>
         </article>
 

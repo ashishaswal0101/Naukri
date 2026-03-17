@@ -106,7 +106,7 @@ export default function ProfilePage() {
       return "No resume uploaded yet";
     }
 
-    return `${state.profile.resume.fileName} • ${titleCase(
+    return `${state.profile.resume.fileName} | ${titleCase(
       state.profile.resume.storageProvider || "cloud storage",
     )}`;
   }, [state.profile]);
@@ -244,9 +244,36 @@ export default function ProfilePage() {
           <form onSubmit={handleSubmit} className="mt-6 grid gap-4 md:grid-cols-2">
             <TextField label="Full name" value={form.name} onChange={handleChange("name")} />
             <TextField label="Phone" value={form.phone} onChange={handleChange("phone")} />
+            <TextField label="Alternate phone" value={form.altPhone} onChange={handleChange("altPhone")} />
+            <TextField label="Headline" value={form.headline} onChange={handleChange("headline")} />
             <TextField label="Total experience" value={form.totalExperience} onChange={handleChange("totalExperience")} />
+            <TextField label="Current title" value={form.currentTitle} onChange={handleChange("currentTitle")} />
+            <TextField label="Current company" value={form.currentCompany} onChange={handleChange("currentCompany")} />
+            <TextField label="Notice period" value={form.noticePeriod} onChange={handleChange("noticePeriod")} />
             <TextField label="Current city" value={form.currentCity} onChange={handleChange("currentCity")} />
+            <TextField label="Current state" value={form.currentState} onChange={handleChange("currentState")} />
+            <TextField label="Current country" value={form.currentCountry} onChange={handleChange("currentCountry")} />
+            <TextField
+              label="Preferred roles"
+              value={form.preferredRoles}
+              onChange={handleChange("preferredRoles")}
+              placeholder="e.g. Product Manager, UX Designer"
+            />
+            <TextField
+              label="Preferred locations"
+              value={form.preferredLocations}
+              onChange={handleChange("preferredLocations")}
+              placeholder="e.g. Bengaluru, Remote"
+            />
+            <TextField
+              label="Skills"
+              value={form.skills}
+              onChange={handleChange("skills")}
+              placeholder="e.g. Figma, React, SQL"
+            />
             <TextField label="LinkedIn URL" value={form.linkedInUrl} onChange={handleChange("linkedInUrl")} />
+            <TextField label="Portfolio URL" value={form.portfolioUrl} onChange={handleChange("portfolioUrl")} />
+            <TextField label="Expected salary" value={form.expectedSalary} onChange={handleChange("expectedSalary")} />
             <TextAreaField label="Professional summary" value={form.summary} onChange={handleChange("summary")} className="md:col-span-2" />
             <div className="md:col-span-2">
               <button type="submit" disabled={isSaving} className="rounded-2xl bg-[#163060] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1d3f7f] disabled:cursor-not-allowed disabled:opacity-70">
