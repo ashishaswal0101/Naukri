@@ -43,7 +43,7 @@ export default function Register() {
       !form.email.trim() ||
       !form.password.trim()
     ) {
-      alert("Name, designation, phone number, email, password, and CV are required.");
+      alert("Name, designation, phone number, email, and password are required.");
       return;
     }
 
@@ -57,19 +57,16 @@ export default function Register() {
       return;
     }
 
-    if (!resumeFile) {
-      alert("Please upload your CV to continue.");
-      return;
-    }
+    if (resumeFile) {
+      if (resumeFile.type !== "application/pdf") {
+        alert("Only PDF files are supported.");
+        return;
+      }
 
-    if (resumeFile.type !== "application/pdf") {
-      alert("Only PDF files are supported.");
-      return;
-    }
-
-    if (resumeFile.size > 8 * 1024 * 1024) {
-      alert("CV file size must be 8MB or less.");
-      return;
+      if (resumeFile.size > 8 * 1024 * 1024) {
+        alert("CV file size must be 8MB or less.");
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -83,7 +80,10 @@ export default function Register() {
       payload.append("email", form.email.trim());
       payload.append("password", form.password);
       payload.append("qrToken", token);
-      payload.append("resume", resumeFile);
+      
+      if (resumeFile) {
+        payload.append("resume", resumeFile);
+      }
 
       const response = await registerCandidate(payload);
 

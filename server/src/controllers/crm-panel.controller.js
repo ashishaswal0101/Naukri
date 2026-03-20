@@ -917,7 +917,8 @@ exports.getPackages = asyncHandler(async (req, res) => {
 });
 
 exports.upsertPackage = asyncHandler(async (req, res) => {
-  const name = (req.body.name || "").toUpperCase();
+  console.log("Upserting package - Params:", req.params, "Body:", req.body);
+  const name = (req.params.name || req.body.name || "").toUpperCase();
 
   if (!["STANDARD", "PREMIUM", "ELITE"].includes(name)) {
     throw createHttpError(400, "Invalid package name");

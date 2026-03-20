@@ -373,7 +373,7 @@ exports.register = asyncHandler(async (req, res) => {
   if (!name.trim() || !designation.trim() || !phone.trim() || !email.trim() || !password.trim()) {
     throw createHttpError(
       400,
-      "Name, designation, phone number, email, password, and CV are required",
+      "Name, designation, phone number, email, and password are required",
     );
   }
 
@@ -381,12 +381,10 @@ exports.register = asyncHandler(async (req, res) => {
     throw createHttpError(400, "Phone number must contain 10 to 15 digits");
   }
 
-  if (!req.file) {
-    throw createHttpError(400, "Resume file is required");
-  }
-
-  if (!supportedResumeMimeTypes.has(req.file.mimetype)) {
-    throw createHttpError(400, "Only PDF files are supported");
+  if (req.file) {
+    if (!supportedResumeMimeTypes.has(req.file.mimetype)) {
+      throw createHttpError(400, "Only PDF files are supported");
+    }
   }
 
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -409,17 +407,26 @@ exports.register = asyncHandler(async (req, res) => {
       isActive: true,
     });
 
-    const uploadedResume = await uploadResumeFile(req.file, user._id);
-    const profile = await CandidateProfile.create({
+    let uploadedResume = null;
+    if (req.file) {
+      uploadedResume = await uploadResumeFile(req.file, user._id);
+    }
+
+    const profileData = {
       userId: user._id,
       phone: phone.trim(),
       currentTitle: designation.trim(),
       lastScannedQrToken: qrToken.trim(),
-      resume: {
+    };
+
+    if (uploadedResume) {
+      profileData.resume = {
         ...uploadedResume,
         uploadedAt: new Date(),
-      },
-    });
+      };
+    }
+
+    const profile = await CandidateProfile.create(profileData);
 
     const changedFields = [];
     const changes = [];
@@ -451,16 +458,18 @@ exports.register = asyncHandler(async (req, res) => {
       });
     }
 
-    changedFields.push("resume");
-    changes.push({
-      field: "resume",
-      previousValue: { fileName: "", url: "" },
-      nextValue: {
-        fileName: uploadedResume.fileName,
-        url: uploadedResume.url,
-        storageProvider: uploadedResume.storageProvider,
-      },
-    });
+    if (uploadedResume) {
+      changedFields.push("resume");
+      changes.push({
+        field: "resume",
+        previousValue: { fileName: "", url: "" },
+        nextValue: {
+          fileName: uploadedResume.fileName,
+          url: uploadedResume.url,
+          storageProvider: uploadedResume.storageProvider,
+        },
+      });
+    }
 
     await CandidateProfileHistory.create({
       candidateId: user._id,
